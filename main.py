@@ -13,7 +13,7 @@ bot = Bot(token=BOT_TOKEN, default=DEFAULT_PROPERTIES)
 dp = Dispatcher()
 
 # هندلرها رو بعداً ایمپورت می‌کنیم (بعد از ساخت فایل‌هاشون)
-from handlers import start, categories, services, wallet, profile, tracking, support, admin
+from handlers import start, categories, wallet, profile, admin
 
 async def on_startup():
     await init_db()
