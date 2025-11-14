@@ -33,6 +33,9 @@ async def main():
     dp.include_router(profile_router)
     dp.include_router(admin_router)
 
+    from handlers.services import router as services_router
+dp.include_router(services_router)
+
     dp.startup.register(on_startup)
     await dp.start_polling(bot)
 
