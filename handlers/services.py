@@ -1,9 +1,9 @@
 from aiogram import Router, types
 from aiogram.fsm.context import FSMContext
-from utils import usd_to_irr
 
 router = Router()
 
+# تمام سرویس‌ها و قیمت دلاری (هر وقت خواستی اضافه کن)
 SERVICES = {
     "موسیقی": {
         "Spotify ۱ ماهه شخصی": 3.99,
@@ -38,12 +38,13 @@ SERVICES = {
 @router.message(lambda m: m.text in SERVICES.keys())
 async def show_services(message: types.Message, state: FSMContext):
     cat = message.text
-    text = f"دسته: {cat}\n\nلطفاً سرویس مورد نظر رو انتخاب کن:\n\n"
+    text = f"دسته: {cat} 🎯\n\nسرویس مورد نظرت رو انتخاب کن:\n\n"
     kb = []
     for name, usd in SERVICES[cat].items():
+        from utils import usd_to_irr
         irr = usd_to_irr(usd)
         text += f"• {name}\n   💰 {irr}\n\n"
-        safe_name = name.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "")
+        safe_name = name.replace(" ", "_").replace("(", "").replace(")", "").replace("/", "_")
         kb.append([types.InlineKeyboardButton(text=f"خرید {name}", callback_data=f"buy_{safe_name}")])
     kb.append([types.InlineKeyboardButton(text="بازگشت 🔙", callback_data="back_to_categories")])
     
