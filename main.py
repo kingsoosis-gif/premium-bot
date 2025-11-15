@@ -11,14 +11,9 @@ from database import init_db
 
 # همه هندلرها
 from handlers.start import router as start_router
-from handlers.categories import router as categories_router
-from handlers.services import router as services_router
-from handlers.order import router as order_router
-from handlers.wallet import router as wallet_router
-from handlers.profile import router as profile_router
-from handlers.admin import router as admin_router
+# ... بقیه import ها
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
@@ -27,17 +22,28 @@ WEBHOOK_SECRET = BOT_TOKEN   # برای امنیت، آدرس وبهوک = تو�
 
 
 async def on_startup(app):
-    await init_db()
-    render_url = os.environ.get("RENDER_EXTERNAL_URL")
-    if not render_url:
-        print("⚠ RENDER_EXTERNAL_URL تنظیم نشده!")
-        return
+    logging.info("🚀 تابع on_startup شروع به کار کرد.")
+    try:
+        # 1. راه‌اندازی دیتابیس
+        await init_db()
+        logging.info("✅ دیتابیس با موفقیت راه‌اندازی شد.")
 
-    webhook_url = f"https://{render_url}/{WEBHOOK_SECRET}"
-    await bot.set_webhook(webhook_url)
+        # 2. تنظیم وب‌هوک
+        render_url = os.environ.get("RENDER_EXTERNAL_URL")
+        if not render_url:
+            logging.critical("❌ CRITICAL: RENDER_EXTERNAL_URL تنظیم نشده است! برنامه متوقف می‌شود.")
+            raise RuntimeError("RENDER_EXTERNAL_URL is not set.")
 
-    print("Webhook set:", webhook_url)
-    print("بات روی Render فعال شد ✔")
+        webhook_url = f"https://{render_url}/{WEBHOOK_SECRET}"
+        await bot.set_webhook(webhook_url)
+        
+        logging.info(f"✅ Webhook با موفقیت تنظیم شد: {webhook_url}")
+        logging.info("🎉 بات روی Render با موفقیت فعال شد.")
+
+    except Exception as e:
+        logging.critical(f"❌ یک خطای بحرانی در on_startup رخ داد: {e}", exc_info=True)
+        # exc_info=True کل stack trace خطا را در لاگ‌ها چاپ می‌کند
+        raise # خطا را دوباره پرتاب می‌کنیم تا برنامه متوقف شود
 
 
 async def healthcheck(request):
@@ -47,14 +53,12 @@ async def healthcheck(request):
 def main():
     # ثبت روترها
     dp.include_router(start_router)
-    dp.include_router(categories_router)
-    dp.include_router(services_router)
-    dp.include_router(order_router)
-    dp.include_router(wallet_router)
-    dp.include_router(profile_router)
-    dp.include_router(admin_router)
+    # ... بقیه روترها
 
     app = web.Application()
+
+    # اتصال تابع on_startup به رویداد استارتاپ اپلیکیشن
+    app.on_startup.append(on_startup)
 
     # مسیر وبهوک
     SimpleRequestHandler(dp, bot).register(app, path=f"/{WEBHOOK_SECRET}")
