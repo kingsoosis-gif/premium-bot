@@ -3,10 +3,10 @@ import logging
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
+from aiohttp import web
 
 from config import BOT_TOKEN
 from database import init_db
-from keyboards import main_menu
 
 # همه هندلرها
 from handlers.start import router as start_router
@@ -22,9 +22,15 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
+
 async def on_startup():
     await init_db()
-    print("بات با موفقیت روشن شد! 🚀 همه سرویس‌ها و قیمت‌ها آماده‌ست 💰")
+    print("بات با موفقیت روشن شد! 🚀")
+
+
+async def http_healthcheck(request):
+    return web.Response(text="Bot is running on Render!")
+
 
 async def main():
     # ثبت همه روترها
@@ -37,7 +43,17 @@ async def main():
     dp.include_router(admin_router)
 
     dp.startup.register(on_startup)
-    await dp.start_polling(bot)
+
+    # اجرای Polling در یک Task جدا
+    asyncio.create_task(dp.start_polling(bot))
+
+    # ساخت یک وب‌سرور ساده برای Render
+    app = web.Application()
+    app.add_routes([web.get("/", http_healthcheck)])
+
+    return app
+
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # Render پورت 10000 رو دوست داره :)
+    web.run_app(main(), port=10000)
