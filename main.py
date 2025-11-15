@@ -1,9 +1,10 @@
-import asyncio
+import os
 import logging
+from aiohttp import web
 from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiohttp import web
+from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_application
 
 from config import BOT_TOKEN
 from database import init_db
@@ -22,18 +23,29 @@ logging.basicConfig(level=logging.INFO)
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
+WEBHOOK_SECRET = BOT_TOKEN   # برای امنیت، آدرس وبهوک = توکن
 
-async def on_startup():
+
+async def on_startup(app):
     await init_db()
-    print("بات با موفقیت روشن شد! 🚀")
+    render_url = os.environ.get("RENDER_EXTERNAL_URL")
+    if not render_url:
+        print("⚠ RENDER_EXTERNAL_URL تنظیم نشده!")
+        return
+
+    webhook_url = f"https://{render_url}/{WEBHOOK_SECRET}"
+    await bot.set_webhook(webhook_url)
+
+    print("Webhook set:", webhook_url)
+    print("بات روی Render فعال شد ✔")
 
 
-async def http_healthcheck(request):
-    return web.Response(text="Bot is running on Render!")
+async def healthcheck(request):
+    return web.Response(text="Bot is running on Render (Webhook Mode)")
 
 
-async def main():
-    # ثبت همه روترها
+def main():
+    # ثبت روترها
     dp.include_router(start_router)
     dp.include_router(categories_router)
     dp.include_router(services_router)
@@ -42,18 +54,20 @@ async def main():
     dp.include_router(profile_router)
     dp.include_router(admin_router)
 
-    dp.startup.register(on_startup)
-
-    # اجرای Polling در یک Task جدا
-    asyncio.create_task(dp.start_polling(bot))
-
-    # ساخت یک وب‌سرور ساده برای Render
     app = web.Application()
-    app.add_routes([web.get("/", http_healthcheck)])
+
+    # مسیر وبهوک
+    SimpleRequestHandler(dp, bot).register(app, path=f"/{WEBHOOK_SECRET}")
+
+    # health check (برای رندر)
+    app.router.add_get("/", healthcheck)
+
+    # وصل کردن Aiogram به سرور aiohttp
+    setup_application(app, dp, bot=bot)
 
     return app
 
 
 if __name__ == "__main__":
-    # Render پورت 10000 رو دوست داره :)
-    web.run_app(main(), port=10000)
+    port = int(os.environ.get("PORT", 10000))
+    web.run_app(main(), host="0.0.0.0", port=port)
