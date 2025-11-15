@@ -18,32 +18,42 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(level
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-WEBHOOK_SECRET = BOT_TOKEN   # برای امنیت، آدرس وبهوک = توکن
+# --- تغییرات اینجا شروع می‌شود ---
+
+# به جای استفاده از توکن به عنوان مسیر، یک مسیر ساده انتخاب کنید
+WEBHOOK_PATH = "/webhook" 
+# از توکن ربات به عنوان توکن امنیتی برای تایید درخواست‌ها استفاده کنید
+WEBHOOK_SECRET_TOKEN = BOT_TOKEN 
+
+# --- تغییرات اینجا تمام می‌شود ---
 
 
 async def on_startup(app):
     logging.info("🚀 تابع on_startup شروع به کار کرد.")
     try:
-        # 1. راه‌اندازی دیتابیس
         await init_db()
         logging.info("✅ دیتابیس با موفقیت راه‌اندازی شد.")
 
-        # 2. تنظیم وب‌هوک
         render_url = os.environ.get("RENDER_EXTERNAL_URL")
         if not render_url:
             logging.critical("❌ CRITICAL: RENDER_EXTERNAL_URL تنظیم نشده است! برنامه متوقف می‌شود.")
             raise RuntimeError("RENDER_EXTERNAL_URL is not set.")
 
-        webhook_url = f"https://{render_url}/{WEBHOOK_SECRET}"
-        await bot.set_webhook(webhook_url)
+        # آدرس وب‌هوک حالا بسیار ساده و تمیز است
+        webhook_url = f"https://{render_url}{WEBHOOK_PATH}"
+        
+        # تنظیم وب‌هوک با استفاده از secret_token برای امنیت
+        await bot.set_webhook(
+            url=webhook_url,
+            secret_token=WEBHOOK_SECRET_TOKEN
+        )
         
         logging.info(f"✅ Webhook با موفقیت تنظیم شد: {webhook_url}")
         logging.info("🎉 بات روی Render با موفقیت فعال شد.")
 
     except Exception as e:
         logging.critical(f"❌ یک خطای بحرانی در on_startup رخ داد: {e}", exc_info=True)
-        # exc_info=True کل stack trace خطا را در لاگ‌ها چاپ می‌کند
-        raise # خطا را دوباره پرتاب می‌کنیم تا برنامه متوقف شود
+        raise
 
 
 async def healthcheck(request):
@@ -56,12 +66,14 @@ def main():
     # ... بقیه روترها
 
     app = web.Application()
-
-    # اتصال تابع on_startup به رویداد استارتاپ اپلیکیشن
     app.on_startup.append(on_startup)
 
-    # مسیر وبهوک
-    SimpleRequestHandler(dp, bot).register(app, path=f"/{WEBHOOK_SECRET}")
+    # ثبت هندلر وب‌هوک با مسیر جدید و توکن امنیتی
+    SimpleRequestHandler(
+        dispatcher=dp,
+        bot=bot,
+        secret_token=WEBHOOK_SECRET_TOKEN  # این پارامتر بسیار مهم است
+    ).register(app, path=WEBHOOK_PATH)
 
     # health check (برای رندر)
     app.router.add_get("/", healthcheck)
