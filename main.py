@@ -9,7 +9,7 @@ from aiogram.webhook.aiohttp_server import SimpleRequestHandler, setup_applicati
 from config import BOT_TOKEN
 from database import init_db
 
-# همه روترها (حتماً همه رو اضافه کن)
+# همه روترها
 from handlers.start import router as start_router
 from handlers.categories import router as categories_router
 from handlers.services import router as services_router
@@ -23,30 +23,44 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 bot = Bot(token=BOT_TOKEN, default=DefaultBotProperties(parse_mode=ParseMode.HTML))
 dp = Dispatcher()
 
-# تنظیمات وب‌هوک
 WEBHOOK_PATH = "/webhook"
-WEBHOOK_SECRET = BOT_TOKEN.split(":")[1][:32]  # فقط یه قسمت از توکن برای امنیت
-WEBHOOK_URL = f"https://{os.environ['RENDER_EXTERNAL_URL']}{WEBHOOK_PATH}"
+WEBHOOK_SECRET = "my_super_secret_token_2025"  # یه متن ثابت، هر چی دوست داری
 
 async def on_startup(app):
     await init_db()
-    await bot.set_webhook(
-        url=WEBHOOK_URL,
-        secret_token=WEBHOOK_SECRET,
-        drop_pending_updates=True
-    )
-    logging.info(f"Webhook تنظیم شد: {WEBHOOK_URL}")
+    
+    # این متغیر رو Render خودش اتوماتیک ست می‌کنه
+    render_url = os.getenv("RENDER_EXTERNAL_URL")
+    if not render_url:
+        logging.error("RENDER_EXTERNAL_URL پیدا نشد! ۳۰ ثانیه صبر می‌کنیم...")
+        await asyncio.sleep(30)
+        render_url = os.getenv("RENDER_EXTERNAL_URL")
+    
+    if not render_url:
+        logging.critical("هنوز URL نداریم، از polling استفاده می‌کنیم (موقتاً)")
+        return
+
+    webhook_url = f"https://{render_url}{WEBHOOK_PATH}"
+    
+    try:
+        await bot.set_webhook(
+            url=webhook_url,
+            secret_token=WEBHOOK_SECRET,
+            drop_pending_updates=True
+        )
+        logging.info(f"وب‌هوک با موفقیت تنظیم شد: {webhook_url}")
+    except Exception as e:
+        logging.error(f"خطا در تنظیم وب‌هوک: {e}")
 
 async def on_shutdown(app):
-    logging.info("در حال خاموش شدن...")
+    logging.info("در حال حذف وب‌هوک...")
     await bot.delete_webhook(drop_pending_updates=True)
     await bot.session.close()
 
 async def health(request):
-    return web.Response(text="Bot is alive and running on Webhook!")
+    return web.Response(text="Bot is alive! Webhook Mode Active")
 
 def main():
-    # ثبت همه روترها
     dp.include_router(start_router)
     dp.include_router(categories_router)
     dp.include_router(services_router)
@@ -59,19 +73,17 @@ def main():
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
 
-    # وب‌هوک هندلر
     SimpleRequestHandler(
         dispatcher=dp,
         bot=bot,
         secret_token=WEBHOOK_SECRET
     ).register(app, path=WEBHOOK_PATH)
 
-    # هلث‌چک برای Render
     app.router.add_get("/", health)
-
     setup_application(app, dp, bot=bot)
     return app
 
 if __name__ == "__main__":
+    import asyncio
     port = int(os.environ.get("PORT", 10000))
     web.run_app(main(), host="0.0.0.0", port=port)
